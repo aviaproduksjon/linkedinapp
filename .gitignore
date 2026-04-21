@@ -1,0 +1,57 @@
+# macOS
+.DS_Store
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# TypeScript
+*.tsbuildinfo
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# Railway
+.railway/
+
+# Vercel
+.vercel
+
+# Uploads (never commit user data)
+uploads/
+tmp/
+
+# AI usage local caches
+.ai-cache/

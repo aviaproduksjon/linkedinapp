@@ -1,0 +1,16 @@
+# Railway deployment config for the BullMQ worker.
+# https://docs.railway.com/reference/config-as-code
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install --frozen-lockfile && pnpm -F @linkedin-hub/shared build && pnpm -F @linkedin-hub/worker build"
+
+[deploy]
+startCommand = "pnpm -F @linkedin-hub/worker start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+healthcheckPath = ""
+# Worker has no HTTP port — it only runs queues.
+
+[[services]]
+name = "worker"

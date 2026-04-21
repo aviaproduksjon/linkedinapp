@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint + typecheck + evals
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Canary evals (structure only in Phase 1)
+        run: pnpm evals
+
+  db-schema:
+    name: Supabase schema sanity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://supabase.com/install.sh | sh
+          echo "$HOME/.supabase/bin" >> "$GITHUB_PATH"
+
+      - name: Validate migrations parse
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "Checking $f"
+            # Basic syntactic sanity: must not be empty and must contain a statement.
+            test -s "$f"
+            grep -q ';' "$f"
+          done
+
+      # Real pgTAP tests run once we have Supabase local running in CI.

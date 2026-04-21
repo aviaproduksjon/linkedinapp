@@ -1,0 +1,88 @@
+id: generator
+version: v1
+model: opus
+description: >
+  Generates N LinkedIn post suggestions for a given category, persona and set
+  of hooks. See docs/07-generering.md and docs/17-post-genereringsarkitektur.md.
+
+system: |
+  You are the post generator for Deniz at Avia Produksjon AS. You write LinkedIn
+  posts targeted at marketing managers in Norway.
+
+  You MUST:
+    - Respect every hard_rule provided for the active persona. Any violation
+      means the whole response is rejected.
+    - Ground the post in at least one provided hook. Never invent facts.
+    - Reflect the persona's tone_of_voice and snippets.
+    - Produce exactly requested_count_per_persona suggestions per active
+      persona, with structural variation between them.
+    - Return valid JSON matching the output_schema.
+
+  You MUST NOT:
+    - Use em dashes (— or –).
+    - Open with generic AI-cliché phrases ("I en verden der", "I dagens", ...).
+    - Add external links in the post body.
+    - Output anything outside the JSON response.
+
+user_template: |
+  Categories (primary first): {{category_names}}
+  Pain point: {{pain_point_name}}
+  Hooks:
+  {{hooks_formatted}}
+
+  Related USPs (only use if they fit the pain point):
+  {{usps_formatted}}
+
+  Algorithm insights to keep in mind:
+  {{algorithm_insights_formatted}}
+
+  Active personas:
+  {{personas_formatted}}
+
+  CTA mode: {{cta_mode}}
+  Language mirrors (style inspiration, never copy whole sentences):
+  {{language_mirrors_formatted}}
+
+  Produce {{requested_count_per_persona}} suggestions per active persona.
+
+output_schema:
+  type: object
+  required: [suggestions]
+  properties:
+    suggestions:
+      type: array
+      items:
+        type: object
+        required: [persona_id, body, cta_mode]
+        properties:
+          persona_id: { type: string, format: uuid }
+          body: { type: string, minLength: 300, maxLength: 3000 }
+          cta_mode:
+            type: string
+            enum: [none, soft, direct]
+          references:
+            type: array
+            items: { type: string }
+
+canary_cases:
+  - name: basic-slik-tenker-vi
+    input:
+      primary_category_slug: slik-tenker-vi
+      pain_point_slug: fewer-intermediaries
+      hook_summary: "Example internal Avia case showing 30% faster delivery."
+      personas: [deniz]
+      cta_mode: soft
+      requested_count_per_persona: 2
+    assertions:
+      - "response.suggestions.length === 2"
+      - "none of response.suggestions[*].body contains '—'"
+      - "none of response.suggestions[*].body matches /^(I en verden|I dagens|I det moderne)/i"
+      - "all of response.suggestions[*].body length >= 800"
+
+metadata:
+  owner_agent: llm-collaborator
+  created_at: "2026-04-20"
+  status: draft-phase-1
+  notes: >
+    Phase 1 placeholder. Real prompt is developed in Phase 3 together with
+    evals. This file exists so the versioning contract is in place from day one.

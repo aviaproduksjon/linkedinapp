@@ -1,0 +1,26 @@
+prompt: generator@v1
+case: basic-slik-tenker-vi
+description: >
+  Baseline canary for the generator. A working generator MUST produce two
+  suggestions respecting hard_rules. Breaks CI on regression.
+
+input:
+  primary_category_slug: slik-tenker-vi
+  pain_point_slug: fewer-intermediaries
+  hooks:
+    - source_type: manual
+      summary: >
+        Avia-case: kunde som byttet fra større byrå til oss leverte første film 11
+        dager raskere enn sist, med færre korrekturrunder.
+  personas:
+    - deniz
+  cta_mode: soft
+  requested_count_per_persona: 2
+
+assertions:
+  - "response.suggestions.length === 2"
+  - "none of response.suggestions[*].body contains '—'"
+  - "none of response.suggestions[*].body contains '–'"
+  - "none of response.suggestions[*].body matches /^(I en verden|I dagens|I det moderne)/i"
+  - "all of response.suggestions[*].body length >= 800"
+  - "all of response.suggestions[*].body length <= 3000"

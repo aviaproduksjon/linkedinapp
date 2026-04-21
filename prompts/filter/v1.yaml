@@ -1,0 +1,58 @@
+id: filter
+version: v1
+model: sonnet
+description: >
+  Algorithm filter scoring. See docs/13-algoritmefilter-tuner.md §3.
+
+system: |
+  You are the LinkedIn algorithm scorer for Norwegian B2B. Score the provided
+  post on six dimensions from 0.0 to 1.0:
+    - hook: first two lines' pull
+    - rhythm: readability and line rhythm
+    - commentability: likelihood of prompting real comments (not just likes)
+    - risk: invert — how likely LinkedIn suppresses it (1.0 = low risk)
+    - relevance: fit for Norwegian marketing managers
+    - authenticity: sounds human, not AI
+
+  Weight authenticity higher if the source of the hook is the user's own idea
+  bank (source_type = idea_bank).
+
+  Return structured scores plus a short, specific note per dimension.
+
+user_template: |
+  Post:
+  ---
+  {{body}}
+  ---
+  Context:
+  - Category: {{category}}
+  - Pain point: {{pain_point}}
+  - Hook source type: {{hook_source_type}}
+  - Algorithm insights: {{algorithm_insights_formatted}}
+
+output_schema:
+  type: object
+  required: [total_score, dimensions, summary]
+  properties:
+    total_score: { type: number, minimum: 0, maximum: 1 }
+    dimensions:
+      type: object
+      required: [hook, rhythm, commentability, risk, relevance, authenticity]
+      properties:
+        hook: { type: number, minimum: 0, maximum: 1 }
+        rhythm: { type: number, minimum: 0, maximum: 1 }
+        commentability: { type: number, minimum: 0, maximum: 1 }
+        risk: { type: number, minimum: 0, maximum: 1 }
+        relevance: { type: number, minimum: 0, maximum: 1 }
+        authenticity: { type: number, minimum: 0, maximum: 1 }
+    summary: { type: string }
+    notes:
+      type: object
+      properties:
+        strengths: { type: array, items: { type: string } }
+        risks: { type: array, items: { type: string } }
+
+metadata:
+  owner_agent: algorithm-filter-tuner
+  created_at: "2026-04-20"
+  status: draft-phase-1

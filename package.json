@@ -1,0 +1,28 @@
+{
+  "name": "deniz-linkedin-hub",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LinkedIn post planning, generation, publishing and evaluation platform for Avia Produksjon AS",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev": "pnpm -F @linkedin-hub/app dev",
+    "dev:worker": "pnpm -F @linkedin-hub/worker dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "evals": "pnpm -F @linkedin-hub/app evals",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --local > shared/src/db-types.ts",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.5"
+  }
+}
