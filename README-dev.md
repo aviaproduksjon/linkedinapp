@@ -34,7 +34,7 @@
 ## Prerequisites
 
 - Node.js ≥ 20.11
-- pnpm ≥ 9.12 (`corepack enable` then `corepack use pnpm@9.12.0`)
+- pnpm ≥ 10.33 (`brew install pnpm`)
 - Supabase CLI ≥ 1.200 (`brew install supabase/tap/supabase`)
 - Docker Desktop (for `supabase start`)
 - Redis for the worker (local: `brew install redis && brew services start redis`)

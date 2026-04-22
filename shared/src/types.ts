@@ -7,13 +7,7 @@
  */
 
 import { z } from 'zod';
-import {
-  CATEGORY_SLUGS,
-  CTA_MODES,
-  INPUT_TYPES,
-  POST_STATUSES,
-  SOURCE_TYPES,
-} from './constants.js';
+import { CTA_MODES, SOURCE_TYPES } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // Persona
@@ -122,10 +116,4 @@ export const SuggestionSchema = z.object({
 });
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 
-// ---------------------------------------------------------------------------
-// Post status helper
-// ---------------------------------------------------------------------------
-
-export type CategorySlug = (typeof CATEGORY_SLUGS)[number];
-export type InputType = (typeof INPUT_TYPES)[number];
-export type PostStatus = (typeof POST_STATUSES)[number];
+// Note: CategorySlug, InputType, PostStatus are exported from constants.ts.

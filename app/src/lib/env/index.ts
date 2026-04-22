@@ -5,14 +5,22 @@
 
 import { z } from 'zod';
 
+/**
+ * Treat empty strings as undefined so optional vars work cleanly whether the
+ * variable is absent, commented out, or left blank in .env files.
+ */
+const optionalString = z
+  .union([z.literal(''), z.string().min(1), z.undefined()])
+  .transform((v) => (v === '' ? undefined : v));
+
 const schema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
 
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  OPENAI_API_KEY: z.string().min(1).optional(),
+  SUPABASE_SERVICE_ROLE_KEY: optionalString,
+  ANTHROPIC_API_KEY: optionalString,
+  OPENAI_API_KEY: optionalString,
 
   CLAUDE_MODEL_OPUS: z.string().default('claude-opus-4-6'),
   CLAUDE_MODEL_SONNET: z.string().default('claude-sonnet-4-6'),

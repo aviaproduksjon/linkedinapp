@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "LinkedIn post planning, generation, publishing and evaluation platform for Avia Produksjon AS",
-  "packageManager": "pnpm@9.12.0",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=20.11.0"
   },
