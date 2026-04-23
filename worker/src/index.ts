@@ -1,5 +1,5 @@
-import { logger } from './logger.js';
-import { startPlaceholderWorker } from './workers/placeholder.js';
+import { logger } from './logger';
+import { startPlaceholderWorker } from './workers/placeholder';
 
 async function main() {
   logger.info('worker booting');

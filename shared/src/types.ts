@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { CTA_MODES, SOURCE_TYPES } from './constants.js';
+import { CTA_MODES, SOURCE_TYPES } from './constants';
 
 // ---------------------------------------------------------------------------
 // Persona
