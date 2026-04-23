@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq';
-import { getRedis } from '../redis.js';
-import { logger } from '../logger.js';
-import { QUEUES } from '../queues/index.js';
+import { getRedis } from '../redis';
+import { logger } from '../logger';
+import { QUEUES } from '../queues';
 
 /**
  * Placeholder worker. Phase 1 only. In later phases each queue gets its own
