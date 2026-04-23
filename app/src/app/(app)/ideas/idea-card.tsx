@@ -27,7 +27,9 @@ export function IdeaCard({ idea, categoryMap, painMap }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(idea.content);
-  const [busy, setBusy] = useState<'save' | 'postprocess' | 'archive' | null>(null);
+  const [busy, setBusy] = useState<'save' | 'postprocess' | 'archive' | 'materialize' | null>(
+    null,
+  );
   const [err, setErr] = useState<string | null>(null);
 
   async function saveContent() {
@@ -61,6 +63,24 @@ export function IdeaCard({ idea, categoryMap, painMap }: Props) {
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Analyse feilet');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function materialize() {
+    setBusy('materialize');
+    setErr(null);
+    try {
+      const res = await fetch(`/api/ideas/${idea.id}/materialize`, { method: 'POST' });
+      if (!res.ok) {
+        const p = await res.json().catch(() => ({}));
+        throw new Error(p.error ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+      router.push('/hooks');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Kunne ikke materialisere');
     } finally {
       setBusy(null);
     }
@@ -182,6 +202,15 @@ export function IdeaCard({ idea, categoryMap, painMap }: Props) {
                 className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
               >
                 {busy === 'postprocess' ? 'Analyserer…' : 'Foreslå kategorier'}
+              </button>
+            )}
+            {idea.status !== 'used' && idea.status !== 'archived' && (
+              <button
+                onClick={materialize}
+                disabled={busy === 'materialize'}
+                className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
+              >
+                {busy === 'materialize' ? 'Lager knagg…' : 'Bruk som knagg →'}
               </button>
             )}
             {idea.status !== 'archived' && (
