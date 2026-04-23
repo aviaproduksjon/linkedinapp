@@ -34,6 +34,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/hooks" className="rounded px-2 py-1.5 hover:bg-slate-200">
             Knagger
           </Link>
+          <Link href="/posts" className="rounded px-2 py-1.5 hover:bg-slate-200">
+            Poster
+          </Link>
           <Link href="/company" className="rounded px-2 py-1.5 hover:bg-slate-200">
             Selskapsprofil
           </Link>
