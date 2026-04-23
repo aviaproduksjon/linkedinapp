@@ -55,6 +55,7 @@ Dette er inputene som gir grunnlag for poster. **Postene skal ikke handle om sel
 - **Bransjenyheter:** kampanje.com, Kreativt Forum.
 - **Næringslivsnyheter:** DN, andre kilder som påvirker markedssjefer.
 - **Rapporter:** ANFO, Nielsen og andre troverdige kilder innen kommunikasjon, markedsføring og effekt.
+- **Brukerstyrt web-søk (discovery):** Deniz beskriver et tema eller limer inn en løs tanke. Systemet (Sonnet + Anthropic `web_search`) prioriterer norske bransjekilder, utvider globalt ved behov, og presenterer 3–6 kandidater som knagger klare til godkjenning. Endepunkt: `POST /api/hooks/discover`.
 
 ### Interne kilder (Avia)
 - Nye arbeider postet på Avia sine SoMe eller nettside.

@@ -880,6 +880,7 @@ export type Database = {
         | "internal_avia"
         | "report"
         | "idea_bank"
+        | "web_search"
       usp_status: "suggested" | "active" | "archived"
     }
     CompositeTypes: {
@@ -1493,6 +1494,7 @@ export const Constants = {
         "internal_avia",
         "report",
         "idea_bank",
+        "web_search",
       ],
       usp_status: ["suggested", "active", "archived"],
     },
