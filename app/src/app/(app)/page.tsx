@@ -8,15 +8,23 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   // Pull a quick overview of counts.
-  const [{ count: ideasCount }, { count: activeUspCount }, { count: postsCount }] =
-    await Promise.all([
-      supabase.from('ideas').select('*', { count: 'exact', head: true }),
-      supabase
-        .from('usps')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active'),
-      supabase.from('posts').select('*', { count: 'exact', head: true }),
-    ]);
+  const [
+    { count: ideasCount },
+    { count: hooksCount },
+    { count: activeUspCount },
+    { count: postsCount },
+  ] = await Promise.all([
+    supabase
+      .from('ideas')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['new', 'refined']),
+    supabase
+      .from('hooks')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['new', 'reviewed']),
+    supabase.from('usps').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('posts').select('*', { count: 'exact', head: true }),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -25,8 +33,9 @@ export default async function HomePage() {
         Innlogget som {user?.email}. Fase 2 er i gang — ide-banken er aktiv.
       </p>
 
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Ideer" value={ideasCount ?? 0} href="/ideas" />
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Aktive ideer" value={ideasCount ?? 0} href="/ideas" />
+        <StatCard label="Klare knagger" value={hooksCount ?? 0} href="/hooks" />
         <StatCard label="Aktive USP-er" value={activeUspCount ?? 0} href="/company" />
         <StatCard label="Poster" value={postsCount ?? 0} />
       </div>
