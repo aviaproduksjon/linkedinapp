@@ -7,8 +7,11 @@ import { env } from '@/lib/env';
 /**
  * POST /api/ideas/[id]/postprocess
  *
- * Produce a short AI summary and suggest which categories / pain points / USPs
- * this idea relates to. The user reviews and accepts before it becomes a hook.
+ * Uses Anthropic tool-use to force structured output: the model is given a
+ * single "save_classification" tool and must call it. No free-form text,
+ * no JSON-inside-markdown to parse.
+ *
+ * Phase 2. See docs/18-ide-bank.md §3.
  */
 export async function POST(
   _request: NextRequest,
@@ -31,56 +34,66 @@ export async function POST(
     return NextResponse.json({ error: 'idea not found' }, { status: 404 });
   }
 
-  // Load the taxonomies we'll match against.
   const [{ data: categories }, { data: painPoints }, { data: usps }] = await Promise.all([
     supabase.from('categories').select('id, slug, display_name, description'),
     supabase.from('pain_points').select('id, name, description'),
     supabase.from('usps').select('id, name, description').eq('status', 'active'),
   ]);
 
-  const schema = {
-    type: 'object',
-    required: ['summary', 'category_ids', 'pain_point_ids', 'usp_ids', 'tags'],
-    properties: {
-      summary: { type: 'string', description: 'One Norwegian sentence that captures the idea.' },
-      category_ids: { type: 'array', items: { type: 'string' } },
-      pain_point_ids: { type: 'array', items: { type: 'string' } },
-      usp_ids: { type: 'array', items: { type: 'string' } },
-      tags: { type: 'array', items: { type: 'string' } },
-    },
-  } as const;
+  const validCategoryIds = new Set((categories ?? []).map((c) => c.id));
+  const validPainPointIds = new Set((painPoints ?? []).map((p) => p.id));
+  const validUspIds = new Set((usps ?? []).map((u) => u.id));
 
-  const systemPrompt = `You classify short Norwegian notes jotted down by Deniz, head of growth at Avia Produksjon AS. Avia targets Norwegian marketing managers. Your job is to:
-1. Write a single Norwegian summary sentence (max 20 words).
-2. Select category_ids that fit. Return 0–2. Empty array if none fit.
-3. Select pain_point_ids the note addresses. Return 0–2.
-4. Select usp_ids the note relates to. Return 0–2.
-5. Propose 0–5 short kebab-case tags in Norwegian.
-Return ONLY JSON matching the schema. No prose, no code fences.`;
+  const systemPrompt = `You classify short Norwegian notes written by Deniz, head of growth at Avia Produksjon AS. Avia targets Norwegian marketing managers. You MUST call the save_classification tool exactly once. Never reply in plain text.
+
+Rules:
+- summary: one Norwegian sentence, max 20 words, capturing the core idea.
+- category_ids: 0–2 ids from the provided list. Pick the ones that fit best. Empty array if none fit.
+- pain_point_ids: 0–2 ids from the provided list.
+- usp_ids: 0–2 ids from the provided list (may be empty if no USPs are provided).
+- tags: 0–5 short kebab-case Norwegian tags.
+Only return ids that appear verbatim in the provided lists.`;
 
   const userPrompt = `Idea:
 """
 ${idea.content}
 """
 
-Categories (id, slug, name, description):
+Available categories (pick ids from this list only):
 ${(categories ?? []).map((c) => `- ${c.id} | ${c.slug} | ${c.display_name} | ${c.description ?? ''}`).join('\n') || '(none)'}
 
-Pain points (id, name, description):
+Available pain points (pick ids from this list only):
 ${(painPoints ?? []).map((p) => `- ${p.id} | ${p.name} | ${p.description}`).join('\n') || '(none)'}
 
-USPs (id, name, description):
-${(usps ?? []).map((u) => `- ${u.id} | ${u.name} | ${u.description}`).join('\n') || '(none)'}
-
-Return JSON matching: ${JSON.stringify(schema)}`;
+Available USPs (pick ids from this list only):
+${(usps ?? []).map((u) => `- ${u.id} | ${u.name} | ${u.description}`).join('\n') || '(none)'}`;
 
   const anthropic = getAnthropic();
   const model = env.CLAUDE_MODEL_HAIKU;
+
   const msg = await anthropic.messages.create({
     model,
-    max_tokens: 512,
+    max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
+    tools: [
+      {
+        name: 'save_classification',
+        description: 'Save the summary, suggested category/pain-point/USP ids and tags for this idea.',
+        input_schema: {
+          type: 'object',
+          required: ['summary', 'category_ids', 'pain_point_ids', 'usp_ids', 'tags'],
+          properties: {
+            summary: { type: 'string', description: 'One Norwegian sentence, max 20 words.' },
+            category_ids: { type: 'array', items: { type: 'string' }, maxItems: 2 },
+            pain_point_ids: { type: 'array', items: { type: 'string' }, maxItems: 2 },
+            usp_ids: { type: 'array', items: { type: 'string' }, maxItems: 2 },
+            tags: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+          },
+        },
+      },
+    ],
+    tool_choice: { type: 'tool', name: 'save_classification' },
   });
 
   // Log usage regardless of parse result.
@@ -94,35 +107,42 @@ Return JSON matching: ${JSON.stringify(schema)}`;
     ref_id: idea.id,
   });
 
-  // Extract the JSON text.
-  const textBlock = msg.content.find((b) => b.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') {
-    return NextResponse.json({ error: 'no text in model response' }, { status: 502 });
+  // Find the tool_use block.
+  const toolUse = msg.content.find(
+    (b): b is Extract<(typeof msg.content)[number], { type: 'tool_use' }> => b.type === 'tool_use',
+  );
+  if (!toolUse) {
+    return NextResponse.json(
+      {
+        error: 'model did not call the save_classification tool',
+        raw: msg.content.map((b) => (b.type === 'text' ? b.text : `[${b.type}]`)).join('\n'),
+      },
+      { status: 502 },
+    );
   }
 
-  let parsed: {
-    summary: string;
-    category_ids: string[];
-    pain_point_ids: string[];
-    usp_ids: string[];
-    tags: string[];
+  const input = toolUse.input as {
+    summary?: unknown;
+    category_ids?: unknown;
+    pain_point_ids?: unknown;
+    usp_ids?: unknown;
+    tags?: unknown;
   };
-  try {
-    parsed = JSON.parse(textBlock.text.trim());
-  } catch {
-    return NextResponse.json({ error: 'model returned non-JSON', raw: textBlock.text }, { status: 502 });
-  }
 
-  const validCategoryIds = new Set((categories ?? []).map((c) => c.id));
-  const validPainPointIds = new Set((painPoints ?? []).map((p) => p.id));
-  const validUspIds = new Set((usps ?? []).map((u) => u.id));
+  const summary = typeof input.summary === 'string' ? input.summary : null;
+  const asStringArray = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
   const update = {
-    ai_summary: parsed.summary ?? null,
-    suggested_category_ids: (parsed.category_ids ?? []).filter((id) => validCategoryIds.has(id)),
-    suggested_pain_point_ids: (parsed.pain_point_ids ?? []).filter((id) => validPainPointIds.has(id)),
-    suggested_usp_ids: (parsed.usp_ids ?? []).filter((id) => validUspIds.has(id)),
-    tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 10) : [],
+    ai_summary: summary,
+    suggested_category_ids: asStringArray(input.category_ids).filter((id) =>
+      validCategoryIds.has(id),
+    ),
+    suggested_pain_point_ids: asStringArray(input.pain_point_ids).filter((id) =>
+      validPainPointIds.has(id),
+    ),
+    suggested_usp_ids: asStringArray(input.usp_ids).filter((id) => validUspIds.has(id)),
+    tags: asStringArray(input.tags).slice(0, 10),
     status: 'refined' as const,
   };
 

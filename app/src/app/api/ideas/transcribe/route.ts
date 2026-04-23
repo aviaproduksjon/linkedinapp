@@ -31,8 +31,11 @@ export async function POST(request: NextRequest) {
   try {
     transcription = await transcribeAudio(file, filename);
   } catch (err) {
+    const details = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.error('[transcribe] Whisper call failed:', details);
     return NextResponse.json(
-      { error: 'transcription failed', details: err instanceof Error ? err.message : String(err) },
+      { error: 'transcription failed', details },
       { status: 502 },
     );
   }

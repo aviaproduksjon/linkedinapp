@@ -76,7 +76,8 @@ export function IdeaCapture() {
       const res = await fetch('/api/ideas/transcribe', { method: 'POST', body: form });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        throw new Error(payload.error ?? `HTTP ${res.status}`);
+        const detail = payload.details ? ` — ${payload.details}` : '';
+        throw new Error(`${payload.error ?? `HTTP ${res.status}`}${detail}`);
       }
       router.refresh();
       closeAll();
