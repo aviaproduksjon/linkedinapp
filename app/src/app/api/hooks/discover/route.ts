@@ -143,11 +143,13 @@ ${(painPoints ?? []).map((p) => `- ${p.id} | ${p.name} | ${p.description}`).join
       ],
       tool_choice: { type: 'auto' },
     };
-    // Cast via unknown: the SDK types don't yet know about web_search_20250305.
-    const create = anthropic.messages.create as unknown as (
-      body: unknown,
-    ) => Promise<Anthropic.Messages.Message>;
-    msg = await create(request);
+    // Cast the whole `messages` sub-client via unknown so the call preserves
+    // its `this` binding — extracting `.create` as a standalone reference
+    // breaks the SDK's internal `this._client` lookup.
+    const messages = anthropic.messages as unknown as {
+      create: (body: unknown) => Promise<Anthropic.Messages.Message>;
+    };
+    msg = await messages.create(request);
   } catch (err) {
     const details = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
