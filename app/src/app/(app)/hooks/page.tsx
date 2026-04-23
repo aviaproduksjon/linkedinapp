@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { HookAddFromUrl } from './add-from-url';
 import { HookCard } from './hook-card';
+import { HookDiscover } from './discover';
 
 type Filter = 'all' | 'new' | 'reviewed' | 'used' | 'archived';
 
@@ -24,14 +25,21 @@ export default async function HooksPage({
     query = query.eq('status', filter);
   }
 
-  const [{ data: hooks, error }, { data: categories }, { data: sources }] = await Promise.all([
+  const [
+    { data: hooks, error },
+    { data: categories },
+    { data: sources },
+    { data: painPoints },
+  ] = await Promise.all([
     query,
     supabase.from('categories').select('id, display_name, color'),
     supabase.from('sources').select('id, name, type'),
+    supabase.from('pain_points').select('id, name'),
   ]);
 
   const categoryMap = Object.fromEntries((categories ?? []).map((c) => [c.id, c]));
   const sourceMap = Object.fromEntries((sources ?? []).map((s) => [s.id, s]));
+  const painMap = Object.fromEntries((painPoints ?? []).map((p) => [p.id, p.name]));
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -44,6 +52,7 @@ export default async function HooksPage({
       </header>
 
       <HookAddFromUrl />
+      <HookDiscover categoryMap={categoryMap} painMap={painMap} />
 
       <nav className="mt-6 mb-3 flex gap-1 text-xs">
         {(['all', 'new', 'reviewed', 'used', 'archived'] as const).map((f) => (

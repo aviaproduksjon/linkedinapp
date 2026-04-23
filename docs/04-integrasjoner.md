@@ -102,3 +102,14 @@
 | LLM (Claude) | API | Kritisk | OpenAI fallback |
 | Embedding | API / lokal | Høy | Lokal modell |
 | Transkribering (Whisper) | API | Høy (ide-bank) | Lokal Whisper / Deepgram |
+| Web-søk (Anthropic `web_search`) | API | Høy (hook-discovery) | Brave Search / Tavily / Serper |
+
+### Web-søk via Anthropic
+
+For brukerstyrt knagg-oppdagelse (`/api/hooks/discover`) brukes Anthropic sin innebygde `web_search`-tool i Sonnet. Flyten:
+1. Bruker beskriver et tema fritt.
+2. Sonnet kjører `web_search` (opp til 4 kall) med norsk bransje-allowlist prioritert — kampanje.com, kreativtforum.no, dn.no, anfo.no, nielsen.com m.fl.
+3. Sonnet velger 3–6 kandidater og kaller vår custom `propose_candidates`-tool med strukturert output.
+4. UI viser kandidatene. Bruker trykker "Lagre som knagg" → `POST /api/hooks/save-candidate` skriver direkte inn i `hooks`-tabellen uten re-fetch.
+
+Kostnad: ~$10/1000 web-søk-kall + normale Sonnet-tokens. Logges som `module=research` i `ai_usage`.

@@ -32,6 +32,7 @@ export const SOURCE_TYPES = [
   'internal_avia',
   'report',
   'idea_bank',
+  'web_search',
 ] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
