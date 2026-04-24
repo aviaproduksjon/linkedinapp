@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface Hook {
@@ -159,6 +160,12 @@ export function HookCard({ hook, categoryMap, sourceMap }: Props) {
           </>
         ) : (
           <>
+            <Link
+              href={`/posts/new?hook=${hook.id}`}
+              className="rounded bg-slate-900 px-2 py-1 text-white hover:bg-slate-800"
+            >
+              Generer forslag
+            </Link>
             <button
               onClick={() => setEditing(true)}
               className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
