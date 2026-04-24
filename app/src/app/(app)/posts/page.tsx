@@ -64,6 +64,20 @@ export default async function PostsPage() {
                   )}
                   {persona && <span>{persona.name}</span>}
                   <span>{p.cta_mode}</span>
+                  {typeof p.algorithm_score === 'number' && (
+                    <span
+                      className={
+                        p.algorithm_score >= 0.7
+                          ? 'text-emerald-700'
+                          : p.algorithm_score >= 0.25
+                            ? 'text-amber-700'
+                            : 'text-red-700'
+                      }
+                      title="Algoritme-score"
+                    >
+                      {Math.round(p.algorithm_score * 100)}
+                    </span>
+                  )}
                 </div>
                 <time>{new Date(p.created_at).toLocaleString('nb-NO')}</time>
               </header>
