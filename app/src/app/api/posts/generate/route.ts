@@ -5,7 +5,9 @@ import { getAnthropic } from '@/lib/ai/anthropic';
 import { logAiUsage } from '@/lib/ai/usage';
 import { env } from '@/lib/env';
 import { validateBaseline, referencesAnyHook } from '@/lib/validation/hard-rules';
-import { CTA_MODES, SUGGESTIONS_PER_PERSONA } from '@linkedin-hub/shared';
+import { scorePost, type FilterResult } from '@/lib/ai/filter';
+import { tunePost, type TunerResult } from '@/lib/ai/tuner';
+import { CTA_MODES, SUGGESTIONS_PER_PERSONA, SCORE_THRESHOLDS } from '@linkedin-hub/shared';
 
 /**
  * POST /api/posts/generate
@@ -259,6 +261,167 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Algorithm filter + tuner pass (Phase 3 Part 2).
+  // See docs/13-algoritmefilter-tuner.md and docs/17-post-genereringsarkitektur.md.
+  // -------------------------------------------------------------------------
+
+  const { data: painPoint } = primaryCategory
+    ? await supabase
+        .from('pain_points')
+        .select('name')
+        .eq('active', true)
+        .order('priority')
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+
+  const insightContext = insights.map((i) => ({ section: i.section, bullets: i.bullets }));
+  const hookSourceTypes: string[] = Array.from(
+    new Set(
+      hooks.flatMap((h): string[] => {
+        if (h.idea_id) return ['idea_bank'];
+        if (!h.source_id) return ['manual'];
+        return [];
+      }),
+    ),
+  );
+
+  // Score every accepted candidate in parallel.
+  const scored = await Promise.all(
+    accepted.map(async (a) => {
+      try {
+        const filter = await scorePost({
+          body: a.body,
+          category_display_name: primaryCategory.display_name,
+          pain_point_name: painPoint?.name ?? null,
+          hook_source_types: hookSourceTypes,
+          algorithm_insights: insightContext,
+        });
+        await logAiUsage({
+          userId: user.id,
+          model: env.CLAUDE_MODEL_SONNET,
+          module: 'filter',
+          input_tokens: filter.input_tokens,
+          output_tokens: filter.output_tokens,
+          ref_type: 'suggestion_prefilter',
+          ref_id: generationId,
+          prompt_version: 'filter@v1',
+        });
+        return { accepted: a, filter, error: null as string | null };
+      } catch (err) {
+        return {
+          accepted: a,
+          filter: null,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
+  );
+
+  // Decide per-candidate: pass, tune, or block.
+  const processed = await Promise.all(
+    scored.map(async (entry) => {
+      if (!entry.filter) {
+        // Couldn't score — keep the candidate, but mark score as null.
+        return {
+          accepted: entry.accepted,
+          final_body: entry.accepted.body,
+          pre_filter: null as FilterResult | null,
+          post_filter: null as FilterResult | null,
+          tuner: null as TunerResult | null,
+          blocked: false,
+          filter_error: entry.error,
+        };
+      }
+      const preScore = entry.filter.total_score;
+
+      if (preScore < SCORE_THRESHOLDS.BLOCK_BELOW) {
+        return {
+          accepted: entry.accepted,
+          final_body: entry.accepted.body,
+          pre_filter: entry.filter,
+          post_filter: null as FilterResult | null,
+          tuner: null as TunerResult | null,
+          blocked: true,
+          filter_error: null,
+        };
+      }
+
+      if (preScore >= SCORE_THRESHOLDS.GOOD_ENOUGH) {
+        return {
+          accepted: entry.accepted,
+          final_body: entry.accepted.body,
+          pre_filter: entry.filter,
+          post_filter: entry.filter,
+          tuner: null as TunerResult | null,
+          blocked: false,
+          filter_error: null,
+        };
+      }
+
+      // 0.25–0.70 → tune.
+      let tuner: TunerResult;
+      try {
+        tuner = await tunePost({
+          body: entry.accepted.body,
+          hard_rules: entry.accepted.persona.hard_rules ?? [],
+          algorithm_insights: insightContext,
+        });
+        await logAiUsage({
+          userId: user.id,
+          model: env.CLAUDE_MODEL_SONNET,
+          module: 'tuner',
+          input_tokens: tuner.input_tokens,
+          output_tokens: tuner.output_tokens,
+          ref_type: 'suggestion_tuning',
+          ref_id: generationId,
+          prompt_version: 'tuner@v1',
+        });
+      } catch (err) {
+        return {
+          accepted: entry.accepted,
+          final_body: entry.accepted.body,
+          pre_filter: entry.filter,
+          post_filter: entry.filter,
+          tuner: null as TunerResult | null,
+          blocked: false,
+          filter_error: err instanceof Error ? err.message : String(err),
+        };
+      }
+
+      const finalBody = tuner.rolled_back ? tuner.pre_body : tuner.post_body;
+
+      // Skip re-score for MVP — tuner is supposed to be non-invasive so the
+      // original pre_filter score is a close enough anchor for the user.
+      // Phase 3 Part 3 can add a re-score when we tighten the loop.
+      return {
+        accepted: entry.accepted,
+        final_body: finalBody,
+        pre_filter: entry.filter,
+        post_filter: entry.filter,
+        tuner,
+        blocked: false,
+        filter_error: null,
+      };
+    }),
+  );
+
+  const survivors = processed.filter((p) => !p.blocked);
+  const blockedCount = processed.filter((p) => p.blocked).length;
+
+  if (survivors.length === 0) {
+    return NextResponse.json(
+      {
+        error: 'all suggestions blocked by algorithm filter',
+        blocked_scores: processed
+          .filter((p) => p.blocked)
+          .map((p) => ({ score: p.pre_filter?.total_score ?? null })),
+      },
+      { status: 502 },
+    );
+  }
+
   // Persist to the suggestions table.
   const generatorMeta = {
     hook_ids: body.hook_ids,
@@ -267,15 +430,46 @@ export async function POST(request: NextRequest) {
     cta_mode: body.cta_mode,
     user_notes: body.user_notes ?? null,
     rejected_count: rejected.length,
+    blocked_by_filter_count: blockedCount,
   };
 
-  const rows = accepted.map((a) => ({
-    user_id: user.id,
-    generation_id: generationId,
-    persona_id: a.persona_id,
-    body: a.body,
-    generator_meta: generatorMeta,
-  }));
+  const rows = survivors.map((p) => {
+    const filterNotes = p.pre_filter
+      ? [
+          p.pre_filter.summary,
+          p.pre_filter.strengths.length ? `Styrker: ${p.pre_filter.strengths.join(' · ')}` : null,
+          p.pre_filter.risks.length ? `Risiko: ${p.pre_filter.risks.join(' · ')}` : null,
+          p.tuner && !p.tuner.rolled_back
+            ? `Tuner endret: ${p.tuner.changes.join(' · ')}`
+            : p.tuner?.rolled_back
+              ? `Tuner rullet tilbake: ${p.tuner.rollback_reason}`
+              : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : null;
+
+    const tunerDiff = p.tuner
+      ? {
+          rolled_back: p.tuner.rolled_back,
+          rollback_reason: p.tuner.rollback_reason,
+          changes: p.tuner.changes,
+          pre_body: p.tuner.pre_body,
+          post_body: p.tuner.post_body,
+        }
+      : null;
+
+    return {
+      user_id: user.id,
+      generation_id: generationId,
+      persona_id: p.accepted.persona_id,
+      body: p.final_body,
+      algorithm_score: p.pre_filter?.total_score ?? null,
+      algorithm_notes: filterNotes,
+      tuner_diff: tunerDiff,
+      generator_meta: generatorMeta,
+    };
+  });
 
   const { data: inserted, error: insertError } = await supabase
     .from('suggestions')
@@ -290,6 +484,7 @@ export async function POST(request: NextRequest) {
     generation_id: generationId,
     suggestions: inserted,
     rejected_count: rejected.length,
+    blocked_by_filter_count: blockedCount,
   });
 }
 

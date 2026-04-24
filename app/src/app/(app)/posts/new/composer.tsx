@@ -28,6 +28,15 @@ interface Suggestion {
   persona_id: string;
   body: string;
   generation_id: string;
+  algorithm_score: number | null;
+  algorithm_notes: string | null;
+  tuner_diff: {
+    rolled_back?: boolean;
+    rollback_reason?: string | null;
+    changes?: string[];
+    pre_body?: string;
+    post_body?: string;
+  } | null;
 }
 
 interface Props {
@@ -293,39 +302,14 @@ export function Composer({ hooks, personas, categories, initialHookId }: Props) 
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {suggestions.map((s) => (
-              <article
+              <SuggestionCard
                 key={s.id}
-                className="flex flex-col rounded border border-slate-200 bg-white p-4"
-              >
-                <header className="mb-2 flex items-center justify-between text-xs text-slate-500">
-                  <span>{personaById[s.persona_id]?.name ?? s.persona_id.slice(0, 8)}</span>
-                  {primaryCategory && (
-                    <span
-                      className="rounded border px-1.5 py-0.5"
-                      style={{ borderColor: primaryCategory.color, color: primaryCategory.color }}
-                    >
-                      {primaryCategory.display_name}
-                    </span>
-                  )}
-                </header>
-                {primaryCategory && (
-                  <div
-                    className="mb-2 h-1 rounded"
-                    style={{ backgroundColor: primaryCategory.color }}
-                  />
-                )}
-                <p className="flex-1 whitespace-pre-wrap text-sm text-slate-800">{s.body}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">{s.body.length} tegn</span>
-                  <button
-                    onClick={() => choose(s)}
-                    disabled={choosing === s.id}
-                    className="rounded bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
-                  >
-                    {choosing === s.id ? 'Lagrer…' : 'Velg dette'}
-                  </button>
-                </div>
-              </article>
+                suggestion={s}
+                personaName={personaById[s.persona_id]?.name ?? s.persona_id.slice(0, 8)}
+                primaryCategory={primaryCategory}
+                choosing={choosing === s.id}
+                onChoose={() => choose(s)}
+              />
             ))}
           </div>
           <div>
@@ -340,5 +324,92 @@ export function Composer({ hooks, personas, categories, initialHookId }: Props) 
         </section>
       )}
     </div>
+  );
+}
+
+function SuggestionCard({
+  suggestion,
+  personaName,
+  primaryCategory,
+  choosing,
+  onChoose,
+}: {
+  suggestion: Suggestion;
+  personaName: string;
+  primaryCategory: Category | undefined;
+  choosing: boolean;
+  onChoose: () => void;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const score = suggestion.algorithm_score;
+  const scorePercent = score !== null ? Math.round(score * 100) : null;
+  const scoreColor =
+    score === null
+      ? 'text-slate-400'
+      : score >= 0.7
+        ? 'text-emerald-700'
+        : score >= 0.25
+          ? 'text-amber-700'
+          : 'text-red-700';
+  const wasTuned = suggestion.tuner_diff && suggestion.tuner_diff.rolled_back === false;
+
+  return (
+    <article className="flex flex-col rounded border border-slate-200 bg-white p-4">
+      <header className="mb-2 flex items-center justify-between text-xs text-slate-500">
+        <span>{personaName}</span>
+        <div className="flex items-center gap-2">
+          {primaryCategory && (
+            <span
+              className="rounded border px-1.5 py-0.5"
+              style={{ borderColor: primaryCategory.color, color: primaryCategory.color }}
+            >
+              {primaryCategory.display_name}
+            </span>
+          )}
+          {scorePercent !== null && (
+            <span className={`font-medium ${scoreColor}`}>{scorePercent}</span>
+          )}
+        </div>
+      </header>
+      {primaryCategory && (
+        <div className="mb-2 h-1 rounded" style={{ backgroundColor: primaryCategory.color }} />
+      )}
+      <p className="flex-1 whitespace-pre-wrap text-sm text-slate-800">{suggestion.body}</p>
+
+      {wasTuned && (
+        <p className="mt-2 text-xs italic text-slate-500">
+          ↻ Tuner justerte ({suggestion.tuner_diff?.changes?.length ?? 0} endring
+          {suggestion.tuner_diff?.changes?.length === 1 ? '' : 'er'})
+        </p>
+      )}
+
+      {suggestion.algorithm_notes && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setShowDetails((s) => !s)}
+            className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+          >
+            {showDetails ? 'Skjul detaljer' : 'Vis algoritme-innsikt'}
+          </button>
+          {showDetails && (
+            <div className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-600">
+              {suggestion.algorithm_notes}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between">
+        <span className="text-xs text-slate-400">{suggestion.body.length} tegn</span>
+        <button
+          onClick={onChoose}
+          disabled={choosing}
+          className="rounded bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+        >
+          {choosing ? 'Lagrer…' : 'Velg dette'}
+        </button>
+      </div>
+    </article>
   );
 }
